@@ -64,10 +64,10 @@ def index():
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad'])
-                    # Texto plano para copiar (codigo \t cantidad)
-                    lines = ['codigo\tcantidad']
+                    # Texto plano para copiar (codigo \t espacio \t cantidad), sin titulos
+                    lines = []
                     for _, row in df.iterrows():
-                        lines.append(f"{row['codigo']}\t{row['cantidad']}")
+                        lines.append(f"{row['codigo']}\t\t{row['cantidad']}")
                     resumen_texto = '\n'.join(lines)
                     # Agregar columna vacía en el medio para estética
                     df.insert(1, '', '')
