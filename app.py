@@ -17,9 +17,10 @@ def allowed_file(fn):
 
 @app.route('/', methods=['GET','POST'])
 def index():
-    resumen_html = None
-    error_msg    = None
-    total        = 0
+    resumen_html  = None
+    resumen_texto = None
+    error_msg     = None
+    total         = 0
 
     if request.method == 'POST':
         f = request.files.get('pdf')
@@ -63,6 +64,11 @@ def index():
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad'])
+                    # Texto plano para copiar (codigo \t cantidad)
+                    lines = ['codigo\tcantidad']
+                    for _, row in df.iterrows():
+                        lines.append(f"{row['codigo']}\t{row['cantidad']}")
+                    resumen_texto = '\n'.join(lines)
                     # Agregar columna vacía en el medio para estética
                     df.insert(1, '', '')
                     resumen_html = df.to_html(index=False)
@@ -73,6 +79,7 @@ def index():
     return render_template(
         'index.html',
         resumen_html=resumen_html,
+        resumen_texto=resumen_texto,
         error=error_msg,
         total=total
     )

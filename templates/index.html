@@ -58,10 +58,18 @@
         <span class="number">{{ total }}</span>
       </div>
 
-      <h2>
-        <span>📊</span>
-        Resultados Detallados
-      </h2>
+      <div class="results-header">
+        <h2>
+          <span>📊</span>
+          Resultados Detallados
+        </h2>
+        <button type="button" id="btn-copy" class="btn-copy" onclick="copyResults()">
+          <span id="copy-icon">📋</span>
+          <span id="copy-label">Copiar Resultado</span>
+        </button>
+      </div>
+
+      <textarea id="raw-result" class="hidden">{{ resumen_texto }}</textarea>
 
       <div class="table-wrapper">
         {{ resumen_html|safe }}

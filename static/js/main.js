@@ -2,6 +2,41 @@
 // Modern PDF Extractor - Main Script
 // ===================================
 
+// Copy results to clipboard (plain text, exact format)
+function copyResults() {
+    const raw = document.getElementById('raw-result');
+    if (!raw) return;
+
+    const text = raw.value;
+    const btn = document.getElementById('btn-copy');
+    const icon = document.getElementById('copy-icon');
+    const label = document.getElementById('copy-label');
+
+    navigator.clipboard.writeText(text).then(function () {
+        // Success feedback
+        btn.classList.add('copied');
+        icon.textContent = '✅';
+        label.textContent = '¡Copiado!';
+        setTimeout(function () {
+            btn.classList.remove('copied');
+            icon.textContent = '📋';
+            label.textContent = 'Copiar Resultado';
+        }, 2000);
+    }).catch(function () {
+        // Fallback for older browsers
+        raw.classList.remove('hidden');
+        raw.select();
+        document.execCommand('copy');
+        raw.classList.add('hidden');
+        icon.textContent = '✅';
+        label.textContent = '¡Copiado!';
+        setTimeout(function () {
+            icon.textContent = '📋';
+            label.textContent = 'Copiar Resultado';
+        }, 2000);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const fileInput = document.getElementById('pdf-input');
     const fileLabel = document.querySelector('.file-input-label');
