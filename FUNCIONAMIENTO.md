@@ -56,7 +56,7 @@ No se copian; son solo para identificar y comprobar.
 - **Cliente**: lo que sigue a «Cliente:»; si no hay etiqueta, el segundo nombre en negrita del encabezado (el primero es el vendedor).
 - **Fecha**: la última fecha del PDF (ej. «11 de noviembre de 2026 11:59» o dd/mm/aaaa).
 - **Total del PDF**: el último «Total:».
-- **Suma de PRECIO**: suma de los precios extraídos, con ✓/✗ frente al Total. Si el PDF usa precio unitario, compara con CANTIDAD × PRECIO.
+- **Suma de PRECIO**: suma de los precios de línea tal como vienen en el PDF, con ✓/✗ frente al Total. Si el PDF usa precio unitario, compara con CANTIDAD × PRECIO.
 - **Referencias (PDF / extraídas)**: «N artículos» frente a las filas extraídas.
 - **Unidades (PDF / extraídas)**: «Cant.: U» frente a la suma de CANTIDAD.
 - **Mapa del PDF** (plegable): cada línea con su página y cómo se interpretó: Encabezado, Artículo X, Artículo X (partido entre páginas), Descripción, ⚠ aviso, Total, Pie. Los saltos de página se marcan con una línea punteada.
@@ -72,7 +72,7 @@ Lo que no aparece en el PDF queda vacío; nunca se inventa.
 | cantidad | Número antes de la «x» (ej. `5x` → 5) | Sí |
 | UNIDAD | Siempre el texto «UNIDAD» | Sí |
 | (vacía) | Separador | Sí |
-| PRECIO | Precio de la línea, con el formato del PDF | No (casilla «Mostrar precio») |
+| PRECIO | Precio **unitario**: el recibo trae el total de la línea (ej. `13x … $1,118,000.00`) y se divide entre la cantidad (`$86,000.00`). Mismo formato del PDF. Si el Total del PDF solo cuadra con cantidad × precio, el PDF ya trae unitarios y se dejan tal cual. | No (casilla «Mostrar precio») |
 | PRECIO -N% | PRECIO menos N % (0–100, por defecto 40), mismo formato | No (casilla «Mostrar precio con descuento») |
 
 - Una fila por línea del PDF: **no se suman** cantidades de códigos repetidos.

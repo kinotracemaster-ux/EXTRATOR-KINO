@@ -82,6 +82,16 @@ def formatear_precio(valor, formato):
     return pref + txt
 
 
+def precio_unitario(precio, cantidad):
+    """El recibo trae el total de la línea (ej. 13x $1,118,000.00); el unitario es
+    ese valor ÷ cantidad, con el mismo formato del PDF. Si no se puede leer, ''."""
+    leido = leer_precio(precio)
+    if not leido or not cantidad:
+        return ''
+    valor, formato = leido
+    return formatear_precio(valor / cantidad, formato)
+
+
 # --- Datos del pedido para verificación (fuera de la tabla, no se copian) ---
 PEDIDO_PAT = re.compile(r'\b(?:RECIBO|PEDIDO|ORDEN|FACTURA|COTIZACI[OÓ]N)\b\s*(?:N[°ºo.]*\s*)?#?\s*:?\s*([A-Za-z0-9][A-Za-z0-9-]*)', re.I)
 TOTAL_PAT  = re.compile(r'^\s*TOTAL\s*:?\s*(\$?\s*\d[\d.,]*)\s*$', re.I)
@@ -310,10 +320,23 @@ def index():
                 if total == 0:
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
-                    df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio'])
+                    # En los recibos el precio de cada línea es el TOTAL de la línea
+                    # (13x ... $1,118,000.00); en pantalla se muestra el unitario.
+                    # Solo si el Total del PDF cuadra con cantidad × precio, el PDF ya
+                    # trae unitarios y se dejan tal cual.
+                    total_pdf = leer_precio(pedido['total'])
+                    vals = [(leer_precio(d['precio']), d['cantidad']) for d in datos]
+                    ya_unitario = bool(total_pdf) and \
+                        sum(v[0] for v, q in vals if v) != total_pdf[0] and \
+                        sum(v[0] * q for v, q in vals if v) == total_pdf[0]
+                    for d in datos:
+                        d['precio_pdf'] = d['precio']
+                        if not ya_unitario:
+                            d['precio'] = precio_unitario(d['precio_pdf'], d['cantidad'])
+                    df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio','precio_pdf'])
                     pedido['unidades_ext'] = int(df['cantidad'].sum())
                     # Verificación: suma de los precios extraídos frente al Total del PDF
-                    leidos = [leer_precio(p) for p in df['precio']]
+                    leidos = [leer_precio(p) for p in df['precio_pdf']]
                     validos = [x for x in leidos if x]
                     if validos:
                         ref = leer_precio(pedido['total']) or validos[0]
@@ -352,6 +375,7 @@ def index():
                         lines.append(f"{row['codigo']}\t\t{row['cantidad']}\t{row['unidad']}\t\t{row['precio']}")
                     resumen_texto = '\n'.join(lines)
                     # Columnas vacías de separación: tras el código y entre UNIDAD y PRECIO
+                    df = df.drop(columns=['precio_pdf'])
                     df.insert(1, '', '')
                     df.insert(4, ' ', '')
                     df.columns = ['codigo', '', 'cantidad', 'UNIDAD', '', 'PRECIO']
