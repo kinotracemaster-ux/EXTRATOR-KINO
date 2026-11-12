@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 import pandas as pd
 import pdfplumber
@@ -67,6 +68,36 @@ def precio_de_fila(words, qty_word, code_word, columnas):
             return w['text']
     return ''
 
+RECARGO = Decimal('1.40')  # precio + 40 %
+
+
+def precio_mas_40(precio):
+    """Devuelve el precio + 40 % con el mismo formato del PDF
+    (símbolo, separador de miles y decimales). Si no se puede leer, ''."""
+    m = re.match(r'^(\$?\s*)(\d[\d.,]*)$', precio.strip())
+    if not m:
+        return ''
+    pref, num = m.groups()
+    # Separador decimal: el último '.' o ',' seguido de 1-2 dígitos al final
+    dm = re.search(r'([.,])(\d{1,2})$', num)
+    dec_sep = dm.group(1) if dm else None
+    decs = len(dm.group(2)) if dm else 0
+    miles_sep = ',' if dec_sep == '.' else '.' if dec_sep == ',' else (
+        ',' if ',' in num else '.' if '.' in num else '')
+    entero = num[:dm.start()] if dm else num
+    try:
+        valor = Decimal(entero.replace(miles_sep, '') if miles_sep else entero)
+        if dm:
+            valor += Decimal('0.' + dm.group(2))
+    except InvalidOperation:
+        return ''
+    nuevo = (valor * RECARGO).quantize(Decimal(1).scaleb(-decs), rounding=ROUND_HALF_UP)
+    txt = f'{nuevo:,.{decs}f}'  # formato 1,234.56
+    if miles_sep != ',':
+        txt = txt.replace(',', '\0').replace('.', ',' if dec_sep == ',' else '.').replace('\0', miles_sep)
+    return pref + txt
+
+
 @app.route('/', methods=['GET','POST'])
 def index():
     resumen_html  = None
@@ -121,16 +152,17 @@ def index():
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio'])
-                    # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio),
+                    df['precio40'] = df['precio'].apply(precio_mas_40)
+                    # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio \t precio+40%),
                     # sin titulos. En pantalla, el botón Copiar lo regenera desde la tabla (orden actual).
                     lines = []
                     for _, row in df.iterrows():
-                        lines.append(f"{row['codigo']}\t\t{row['cantidad']}\t{row['unidad']}\t\t{row['precio']}")
+                        lines.append(f"{row['codigo']}\t\t{row['cantidad']}\t{row['unidad']}\t\t{row['precio']}\t{row['precio40']}")
                     resumen_texto = '\n'.join(lines)
                     # Columnas vacías de separación: tras el código y entre UNIDAD y PRECIO
                     df.insert(1, '', '')
                     df.insert(4, ' ', '')
-                    df.columns = ['codigo', '', 'cantidad', 'UNIDAD', '', 'PRECIO']
+                    df.columns = ['codigo', '', 'cantidad', 'UNIDAD', '', 'PRECIO', 'PRECIO +40%']
                     resumen_html = df.to_html(index=False, table_id='results-table')
 
             except Exception as e:
