@@ -23,6 +23,7 @@ UNIDAD_FIJA   = 'UNIDAD'
 PRICE_HEADERS = {'PRECIO', 'P.UNIT', 'P.UNIT.', 'V.UNIT', 'V.UNIT.', 'VR.UNIT', 'VR.UNIT.'}
 PRICE_PAT     = re.compile(r'^\$?\s*\d[\d.,]*$')
 QTY_PAT       = re.compile(r'^\d+[x×]')
+CODE_PAT      = re.compile(r'^[A-Za-z0-9][A-Za-z0-9:.\-]*$')
 LINE_TOL      = 3  # tolerancia vertical (pt) para considerar dos palabras en la misma fila
 
 
@@ -192,9 +193,20 @@ def index():
 
                 with pdfplumber.open(path) as pdf:
                     pedido = datos_pedido(pdf)
+                    # Cantidad que quedó al final de una página sin su código
+                    # (el código pasó a la página siguiente).
+                    pendiente = None
                     for page in pdf.pages:
                         words = page.extract_words(use_text_flow=True)
                         columnas = find_columns(words)
+                        if pendiente:
+                            # El código es la primera palabra de la página con forma de código
+                            for cw in words:
+                                if CODE_PAT.match(cw['text']) and any(c.isdigit() for c in cw['text']):
+                                    datos.append({'codigo': cw['text'], 'cantidad': pendiente['cantidad'],
+                                                  'unidad': UNIDAD_FIJA, 'precio': pendiente['precio']})
+                                    break
+                            pendiente = None
                         for idx, w in enumerate(words):
                             txt = w['text']
                             # 1) ¿Cantidad+Código en la misma palabra?
@@ -208,11 +220,17 @@ def index():
                                 continue
                             # 2) ¿Solo cantidad? entonces tomo la siguiente palabra como código
                             m2 = qty_only_pat.match(txt)
+                            if m2 and (idx + 1 >= len(words)
+                                       or not CODE_PAT.match(words[idx+1]['text'])):
+                                # Sin código a continuación: puede estar en la página siguiente
+                                pendiente = {'cantidad': int(m2.group(1)),
+                                             'precio': precio_de_fila(words, w, w, columnas)}
+                                continue
                             if m2 and idx + 1 < len(words):
                                 cantidad = int(m2.group(1))
                                 codigo   = words[idx+1]['text']
                                 # validamos que el token “parezca” código
-                                if re.match(r'^[A-Za-z0-9][A-Za-z0-9:.\-]*$', codigo):
+                                if CODE_PAT.match(codigo):
                                     precio = precio_de_fila(words, w, words[idx+1], columnas)
                                     datos.append({'codigo': codigo, 'cantidad': cantidad,
                                                   'unidad': UNIDAD_FIJA, 'precio': precio})
