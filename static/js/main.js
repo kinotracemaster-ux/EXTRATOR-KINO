@@ -28,7 +28,7 @@ function sortResults() {
     rows.forEach(function (tr) { tbody.appendChild(tr); });
 }
 
-// ---- Optional markup column (PRECIO +N%), hidden by default ----
+// ---- Optional discount column (PRECIO -N%), hidden by default ----
 // Reads a price as written in the PDF ('$72,000.00', '$1.000,50', '3.200').
 function parsePrice(text) {
     const m = (text || '').trim().match(/^(\$?\s*)(\d[\d.,]*)$/);
@@ -55,7 +55,7 @@ function formatPrice(cents, f) {
     return f.pref + intStr + decStr;
 }
 
-// Adds, updates or removes the markup column right after PRECIO.
+// Adds, updates or removes the discount column right after PRECIO.
 function updateMarkup() {
     const table = document.getElementById('results-table');
     const toggle = document.getElementById('markup-toggle');
@@ -79,13 +79,13 @@ function updateMarkup() {
     }
 
     const pct = parseFloat(String(pctInput.value).replace(',', '.'));
-    const valid = isFinite(pct) && pct >= 0;
+    const valid = isFinite(pct) && pct >= 0 && pct <= 100;
     if (!exists) {
         const th = document.createElement('th');
         th.className = 'markup-col';
         headRow.insertBefore(th, headRow.cells[markupIdx] || null);
     }
-    headRow.cells[markupIdx].textContent = valid ? 'PRECIO +' + pct + '%' : 'PRECIO +%';
+    headRow.cells[markupIdx].textContent = valid ? 'PRECIO -' + pct + '%' : 'PRECIO -%';
 
     Array.from(table.tBodies[0].rows).forEach(function (tr) {
         let td = tr.cells[markupIdx];
@@ -94,12 +94,12 @@ function updateMarkup() {
             td.className = 'markup-col';
         }
         const p = parsePrice(tr.cells[priceIdx].textContent);
-        td.textContent = (p && valid) ? formatPrice(p.cents * (100 + pct) / 100, p) : '';
+        td.textContent = (p && valid) ? formatPrice(p.cents * (100 - pct) / 100, p) : '';
     });
 }
 
 // ---- Optional PRECIO column, hidden by default ----
-// The cells stay in the table (the markup column reads them); they are only
+// The cells stay in the table (the discount column reads them); they are only
 // hidden, and hidden cells are left out of the copy.
 function updatePriceVisibility() {
     const table = document.getElementById('results-table');
