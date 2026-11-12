@@ -15,14 +15,11 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def allowed_file(fn):
     return '.' in fn and fn.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- Unidad y precio de cada referencia ---------------------------------
-# Encabezados de columna que se buscan en la página del PDF.
-UNIT_HEADERS  = {'UNIDAD', 'UNIDADES', 'UND', 'UNID', 'U/M', 'UM', 'U.M.', 'MEDIDA'}
+# --- Precio de cada referencia --------------------------------------------
+# La columna UNIDAD siempre muestra este texto en todas las filas.
+UNIDAD_FIJA   = 'UNIDAD'
+# Encabezados de la columna de precio que se buscan en la página del PDF.
 PRICE_HEADERS = {'PRECIO', 'P.UNIT', 'P.UNIT.', 'V.UNIT', 'V.UNIT.', 'VR.UNIT', 'VR.UNIT.'}
-# Unidades reconocidas cuando la página no tiene encabezados.
-UNIT_TOKENS   = {'UND', 'UNID', 'UNIDAD', 'UNIDADES', 'PAR', 'PARES', 'PZA', 'PZ', 'PIEZA',
-                 'KG', 'CAJA', 'CJ', 'MT', 'MTS', 'LT', 'GL', 'ROLLO', 'PAQ', 'DOC',
-                 'DOCENA', 'JGO', 'JUEGO', 'BOLSA', 'SET', 'KIT'}
 PRICE_PAT     = re.compile(r'^\$?\s*\d[\d.,]*$')
 QTY_PAT       = re.compile(r'^\d+[x×]')
 LINE_TOL      = 3  # tolerancia vertical (pt) para considerar dos palabras en la misma fila
@@ -33,51 +30,42 @@ def _norm(txt):
 
 
 def find_columns(words):
-    """Devuelve (anclas, x_unidad, x_precio) a partir de la fila de encabezados.
+    """Devuelve (anclas, x_precio) a partir de la fila de encabezados.
 
     Las anclas son todas las palabras de la fila de encabezados (x central),
     para poder asignar cada valor a su columna más cercana."""
     for w in words:
-        t = _norm(w['text'])
-        if t in UNIT_HEADERS or t in PRICE_HEADERS:
+        if _norm(w['text']) in PRICE_HEADERS:
             fila = [h for h in words if abs(h['top'] - w['top']) <= LINE_TOL]
             # Una fila con cantidad (ej. 10x) es de datos, no de encabezados
             if any(QTY_PAT.match(h['text']) for h in fila):
                 continue
             fila.sort(key=lambda h: h['x0'])
             anclas = [((h['x0'] + h['x1']) / 2, _norm(h['text'])) for h in fila]
-            x_u = next((x for x, t in anclas if t in UNIT_HEADERS), None)
             x_p = next((x for x, t in anclas if t in PRICE_HEADERS), None)
-            return anclas, x_u, x_p
-    return None, None, None
+            return anclas, x_p
+    return None, None
 
 
-def unidad_y_precio(words, code_word, columnas):
-    """Busca unidad y precio en la misma fila del PDF, a la derecha del código.
-    Si no se encuentran con certeza, devuelve cadena vacía (no se inventan datos)."""
-    anclas, x_u, x_p = columnas
+def precio_de_fila(words, qty_word, code_word, columnas):
+    """Busca el precio a la derecha del código, en la misma fila que la cantidad
+    o que el código (en algunos PDF el precio va alineado con la cantidad y el
+    código queda un poco más arriba). Si no se encuentra, devuelve ''."""
+    anclas, x_p = columnas
+    tops = {qty_word['top'], code_word['top']}
     fila = [w for w in words
-            if abs(w['top'] - code_word['top']) <= LINE_TOL and w['x0'] > code_word['x1']]
+            if w['x0'] > code_word['x1']
+            and any(abs(w['top'] - t) <= LINE_TOL for t in tops)]
     fila.sort(key=lambda w: w['x0'])
-    unidad, precio = [], []
-    if anclas and (x_u is not None or x_p is not None):
-        for w in fila:
-            xc = (w['x0'] + w['x1']) / 2
-            cerca = min(anclas, key=lambda a: abs(a[0] - xc))[0]
-            if x_u is not None and cerca == x_u:
-                unidad.append(w['text'])
-            elif x_p is not None and cerca == x_p:
-                precio.append(w['text'])
-    else:
-        # Sin encabezados: precio = primer valor con '$'; unidad = palabra justo
-        # antes del precio, solo si es una unidad conocida (ej. "UND $9.900").
-        for i, w in enumerate(fila):
-            if w['text'].startswith('$') and PRICE_PAT.match(w['text']):
-                precio.append(w['text'])
-                if i > 0 and _norm(fila[i-1]['text']) in UNIT_TOKENS:
-                    unidad.append(fila[i-1]['text'])
-                break
-    return ' '.join(unidad), ' '.join(precio)
+    if anclas and x_p is not None:
+        precio = [w['text'] for w in fila
+                  if min(anclas, key=lambda a: abs(a[0] - (w['x0'] + w['x1']) / 2))[0] == x_p]
+        return ' '.join(precio)
+    # Sin encabezados: precio = primer valor con '$'
+    for w in fila:
+        if w['text'].startswith('$') and PRICE_PAT.match(w['text']):
+            return w['text']
+    return ''
 
 @app.route('/', methods=['GET','POST'])
 def index():
@@ -113,9 +101,9 @@ def index():
                             if m1:
                                 cantidad = int(m1.group(1))
                                 codigo   = m1.group(2)
-                                unidad, precio = unidad_y_precio(words, w, columnas)
+                                precio = precio_de_fila(words, w, w, columnas)
                                 datos.append({'codigo': codigo, 'cantidad': cantidad,
-                                              'unidad': unidad, 'precio': precio})
+                                              'unidad': UNIDAD_FIJA, 'precio': precio})
                                 continue
                             # 2) ¿Solo cantidad? entonces tomo la siguiente palabra como código
                             m2 = qty_only_pat.match(txt)
@@ -124,9 +112,9 @@ def index():
                                 codigo   = words[idx+1]['text']
                                 # validamos que el token “parezca” código
                                 if re.match(r'^[A-Za-z0-9][A-Za-z0-9:.\-]*$', codigo):
-                                    unidad, precio = unidad_y_precio(words, words[idx+1], columnas)
+                                    precio = precio_de_fila(words, w, words[idx+1], columnas)
                                     datos.append({'codigo': codigo, 'cantidad': cantidad,
-                                                  'unidad': unidad, 'precio': precio})
+                                                  'unidad': UNIDAD_FIJA, 'precio': precio})
 
                 total = len(datos)
                 if total == 0:
