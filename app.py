@@ -104,7 +104,8 @@ def formatear_precio(valor, formato):
 # --- Datos del pedido para verificación (fuera de la tabla, no se copian) ---
 PEDIDO_PAT = re.compile(r'\b(?:RECIBO|PEDIDO|ORDEN|FACTURA|COTIZACI[OÓ]N)\b\s*(?:N[°ºo.]*\s*)?#?\s*:?\s*([A-Za-z0-9][A-Za-z0-9-]*)', re.I)
 TOTAL_PAT  = re.compile(r'^\s*TOTAL\s*:?\s*(\$?\s*\d[\d.,]*)\s*$', re.I)
-CANT_PAT   = re.compile(r'Cant\.?\s*:\s*(\d+)', re.I)
+CANT_PAT   = re.compile(r'Cant\.?\s*:\s*(\d+)', re.I)          # unidades (suma de cantidades)
+ART_PAT    = re.compile(r'\b(\d+)\s+art[ií]culos?\b', re.I)     # líneas / referencias
 CLIENTE_PAT = re.compile(r'^\s*CLIENTE\s*:\s*(.+)$', re.I)
 FECHA_PAT  = re.compile(r'\b(\d{1,2} de [A-Za-záéíóúñ]+ de \d{4}(?:,?\s+\d{1,2}:\d{2})?'
                         r'|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d{1,2}:\d{2})?)', re.I)
@@ -117,7 +118,7 @@ def _negrita(linea):
 def datos_pedido(pdf):
     """Busca en el PDF número de pedido, cliente, fecha, total y cantidad de
     artículos. Lo que no aparezca queda como ''."""
-    datos = {'pedido': '', 'cliente': '', 'fecha': '', 'total': '', 'articulos': ''}
+    datos = {'pedido': '', 'cliente': '', 'fecha': '', 'total': '', 'articulos': '', 'unidades': ''}
     lineas = []
     for page in pdf.pages:
         lineas.extend(page.extract_text_lines())
@@ -128,8 +129,12 @@ def datos_pedido(pdf):
             m = PEDIDO_PAT.search(t)
             if m and any(ch.isdigit() for ch in m.group(1)):
                 datos['pedido'] = m.group(1)
-        if not datos['articulos']:
+        if not datos['unidades']:
             m = CANT_PAT.search(t)
+            if m:
+                datos['unidades'] = m.group(1)
+        if not datos['articulos']:
+            m = ART_PAT.search(t)
             if m:
                 datos['articulos'] = m.group(1)
         if not datos['cliente']:
@@ -217,16 +222,23 @@ def index():
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio'])
+                    pedido['unidades_ext'] = int(df['cantidad'].sum())
                     # Verificación: suma de los precios extraídos frente al Total del PDF
                     leidos = [leer_precio(p) for p in df['precio']]
                     validos = [x for x in leidos if x]
                     if validos:
                         ref = leer_precio(pedido['total']) or validos[0]
-                        suma = sum(v for v, _ in validos)
+                        suma = sum(x[0] for x in validos)
+                        # Si PRECIO es unitario, el total del PDF es la suma de cantidad x precio
+                        suma_cant = sum(x[0] * q for x, q in zip(leidos, df['cantidad']) if x)
+                        total_pdf = leer_precio(pedido['total'])
+                        if total_pdf and suma != total_pdf[0] and suma_cant == total_pdf[0]:
+                            suma = suma_cant
+                            pedido['suma_x_cant'] = True
                         pedido['suma'] = formatear_precio(suma, ref[1])
                         pedido['sin_precio'] = len(leidos) - len(validos)
-                        if pedido['total'] and leer_precio(pedido['total']):
-                            pedido['cuadra'] = suma == leer_precio(pedido['total'])[0]
+                        if total_pdf:
+                            pedido['cuadra'] = suma == total_pdf[0]
                     # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio),
                     # sin titulos. En pantalla, el botón Copiar lo regenera desde la tabla (orden actual).
                     lines = []
