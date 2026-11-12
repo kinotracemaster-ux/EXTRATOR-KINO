@@ -214,15 +214,19 @@ def leer_articulos(pdf):
                 if len(paginas) > 1:
                     mapa[i]['tipo'] += ' (partido entre páginas)'
             if not actual['precio']:
-                avisos.append(f"{actual['codigo']}: no se encontró precio.")
+                avisos.append(f"{actual['codigo']}: no se encontró su precio.")
         elif actual['cantidad'] is not None:
             pag = lineas[min(actual['lineas'])]['pagina']
-            avisos.append(f"Página {pag}: cantidad {actual['cantidad']}x sin código; no se incluyó.")
+            texto = lineas[min(actual['lineas'])]['texto']
+            avisos.append(f"Página {pag}: «{texto}» tiene cantidad {actual['cantidad']}x pero no se encontró "
+                          f"su código; no se incluyó.")
             for i in actual['lineas']:
                 mapa[i]['tipo'] = '⚠ Cantidad sin código'
         elif actual['codigo']:
             pag = lineas[min(actual['lineas'])]['pagina']
-            avisos.append(f"Página {pag}: código {actual['codigo']} sin cantidad; no se incluyó.")
+            texto = lineas[min(actual['lineas'])]['texto']
+            avisos.append(f"Página {pag}: «{texto}» empieza como un código ({actual['codigo']}) pero no tiene "
+                          f"cantidad; no se incluyó. Revisar si es una referencia o parte de una descripción.")
             for i in actual['lineas']:
                 mapa[i]['tipo'] = '⚠ Código sin cantidad'
 
@@ -324,6 +328,23 @@ def index():
                         pedido['sin_precio'] = len(leidos) - len(validos)
                         if total_pdf:
                             pedido['cuadra'] = suma == total_pdf[0]
+                    # Revisión: descuadres y avisos, para mostrarlos arriba
+                    revision = []
+                    if pedido.get('cuadra') is False:
+                        dif = leer_precio(pedido['total'])[0] - leer_precio(pedido['suma'])[0]
+                        fmt = leer_precio(pedido['total'])[1]
+                        revision.append(f"La suma de precios ({pedido['suma']}) no coincide con el Total del PDF "
+                                        f"({pedido['total']}): {'faltan' if dif > 0 else 'sobran'} "
+                                        f"{formatear_precio(abs(dif), fmt)}.")
+                    if pedido['articulos'] and int(pedido['articulos']) != total:
+                        n = int(pedido['articulos']) - total
+                        revision.append(f"El PDF indica {pedido['articulos']} artículos y se extrajeron {total}: "
+                                        f"{'faltan' if n > 0 else 'sobran'} {abs(n)}.")
+                    if pedido['unidades'] and int(pedido['unidades']) != pedido['unidades_ext']:
+                        n = int(pedido['unidades']) - pedido['unidades_ext']
+                        revision.append(f"El PDF indica {pedido['unidades']} unidades y se extrajeron "
+                                        f"{pedido['unidades_ext']}: {'faltan' if n > 0 else 'sobran'} {abs(n)}.")
+                    pedido['revision'] = revision + avisos
                     # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio),
                     # sin titulos. En pantalla, el botón Copiar lo regenera desde la tabla (orden actual).
                     lines = []

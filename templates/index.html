@@ -53,6 +53,19 @@
 
     {% if resumen_html %}
     <section class="results-section">
+      {% if pedido and pedido.revision is defined %}
+      {% if pedido.revision %}
+      <div class="review review-bad">
+        <h3>⚠ Revisión: {{ pedido.revision|length }} {{ 'punto' if pedido.revision|length == 1 else 'puntos' }} por revisar</h3>
+        <ul>
+          {% for r in pedido.revision %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+        <p class="review-hint">Abre «Mapa del PDF» más abajo para ver la línea exacta.</p>
+      </div>
+      {% elif pedido.total or pedido.articulos or pedido.unidades %}
+      <div class="review review-ok">✓ Revisión: no se encontraron errores ni descuadres.</div>
+      {% endif %}
+      {% endif %}
       <div class="total-count">
         ✅ Códigos encontrados
         <span class="number">{{ total }}</span>
@@ -85,11 +98,6 @@
           <div><dt>Filas sin precio</dt><dd><span class="bad">{{ pedido.sin_precio }}</span></dd></div>
           {% endif %}
         </dl>
-        {% if pedido.avisos %}
-        <ul class="order-warnings">
-          {% for a in pedido.avisos %}<li>⚠ {{ a }}</li>{% endfor %}
-        </ul>
-        {% endif %}
         {% if mapa %}
         <details class="pdf-map">
           <summary>🗺️ Mapa del PDF ({{ mapa|length }} líneas)</summary>
