@@ -71,12 +71,12 @@ def precio_de_fila(words, qty_word, code_word, columnas):
 RECARGO = Decimal('1.40')  # precio + 40 %
 
 
-def precio_mas_40(precio):
-    """Devuelve el precio + 40 % con el mismo formato del PDF
-    (símbolo, separador de miles y decimales). Si no se puede leer, ''."""
-    m = re.match(r'^(\$?\s*)(\d[\d.,]*)$', precio.strip())
+def leer_precio(precio):
+    """Interpreta un precio del PDF ('$72,000.00', '$1.000,50', '3.200').
+    Devuelve (valor, formato) o None si no se puede leer."""
+    m = re.match(r'^(\$?\s*)(\d[\d.,]*)$', (precio or '').strip())
     if not m:
-        return ''
+        return None
     pref, num = m.groups()
     # Separador decimal: el último '.' o ',' seguido de 1-2 dígitos al final
     dm = re.search(r'([.,])(\d{1,2})$', num)
@@ -90,12 +90,87 @@ def precio_mas_40(precio):
         if dm:
             valor += Decimal('0.' + dm.group(2))
     except InvalidOperation:
-        return ''
-    nuevo = (valor * RECARGO).quantize(Decimal(1).scaleb(-decs), rounding=ROUND_HALF_UP)
-    txt = f'{nuevo:,.{decs}f}'  # formato 1,234.56
+        return None
+    return valor, (pref, dec_sep, miles_sep, decs)
+
+
+def formatear_precio(valor, formato):
+    """Escribe un valor con el mismo formato (símbolo, miles, decimales) del PDF."""
+    pref, dec_sep, miles_sep, decs = formato
+    valor = valor.quantize(Decimal(1).scaleb(-decs), rounding=ROUND_HALF_UP)
+    txt = f'{valor:,.{decs}f}'  # formato 1,234.56
     if miles_sep != ',':
         txt = txt.replace(',', '\0').replace('.', ',' if dec_sep == ',' else '.').replace('\0', miles_sep)
     return pref + txt
+
+
+def precio_mas_40(precio):
+    """Devuelve el precio + 40 % con el mismo formato del PDF. Si no se puede leer, ''."""
+    leido = leer_precio(precio)
+    if not leido:
+        return ''
+    valor, formato = leido
+    return formatear_precio(valor * RECARGO, formato)
+
+
+# --- Datos del pedido para verificación (fuera de la tabla, no se copian) ---
+PEDIDO_PAT = re.compile(r'\b(?:RECIBO|PEDIDO|ORDEN|FACTURA|COTIZACI[OÓ]N)\b\s*(?:N[°ºo.]*\s*)?#?\s*:?\s*([A-Za-z0-9][A-Za-z0-9-]*)', re.I)
+TOTAL_PAT  = re.compile(r'^\s*TOTAL\s*:?\s*(\$?\s*\d[\d.,]*)\s*$', re.I)
+CANT_PAT   = re.compile(r'Cant\.?\s*:\s*(\d+)', re.I)
+CLIENTE_PAT = re.compile(r'^\s*CLIENTE\s*:\s*(.+)$', re.I)
+FECHA_PAT  = re.compile(r'\b(\d{1,2} de [A-Za-záéíóúñ]+ de \d{4}(?:,?\s+\d{1,2}:\d{2})?'
+                        r'|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d{1,2}:\d{2})?)', re.I)
+
+
+def _negrita(linea):
+    return any(k in linea['chars'][0]['fontname'].lower() for k in ('bold', 'semibold', 'black'))
+
+
+def datos_pedido(pdf):
+    """Busca en el PDF número de pedido, cliente, fecha, total y cantidad de
+    artículos. Lo que no aparezca queda como ''."""
+    datos = {'pedido': '', 'cliente': '', 'fecha': '', 'total': '', 'articulos': ''}
+    lineas = []
+    for page in pdf.pages:
+        lineas.extend(page.extract_text_lines())
+    textos = [l['text'] for l in lineas]
+
+    for t in textos:
+        if not datos['pedido']:
+            m = PEDIDO_PAT.search(t)
+            if m and any(ch.isdigit() for ch in m.group(1)):
+                datos['pedido'] = m.group(1)
+        if not datos['articulos']:
+            m = CANT_PAT.search(t)
+            if m:
+                datos['articulos'] = m.group(1)
+        if not datos['cliente']:
+            m = CLIENTE_PAT.match(t)
+            if m:
+                datos['cliente'] = m.group(1).strip()
+        m = TOTAL_PAT.match(t)
+        if m:
+            datos['total'] = m.group(1).strip()   # el último "Total" del PDF
+        m = FECHA_PAT.search(t)
+        if m:
+            datos['fecha'] = m.group(1)           # la última fecha del PDF
+
+    # Sin etiqueta "Cliente:": en el encabezado (antes del primer artículo) el
+    # primer nombre en negrita es el vendedor y el segundo, del mismo tamaño, el cliente.
+    if not datos['cliente'] and lineas:
+        encabezado = []
+        for l in lineas:
+            if QTY_PAT.match(l['text']) or CANT_PAT.search(l['text']):
+                break
+            if PEDIDO_PAT.search(l['text']) or not l['chars']:
+                continue
+            if _negrita(l):
+                encabezado.append(l)
+        if len(encabezado) >= 2:
+            vendedor, cliente = encabezado[0], encabezado[1]
+            if round(vendedor['chars'][0]['size']) == round(cliente['chars'][0]['size']):
+                datos['cliente'] = cliente['text'].strip()
+    return datos
 
 
 @app.route('/', methods=['GET','POST'])
@@ -104,6 +179,7 @@ def index():
     resumen_texto = None
     error_msg     = None
     total         = 0
+    pedido        = None
 
     if request.method == 'POST':
         f = request.files.get('pdf')
@@ -122,6 +198,7 @@ def index():
                 qty_only_pat = re.compile(r'^(\d+)[x×]\s*$')
 
                 with pdfplumber.open(path) as pdf:
+                    pedido = datos_pedido(pdf)
                     for page in pdf.pages:
                         words = page.extract_words(use_text_flow=True)
                         columnas = find_columns(words)
@@ -153,6 +230,16 @@ def index():
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio'])
                     df['precio40'] = df['precio'].apply(precio_mas_40)
+                    # Verificación: suma de los precios extraídos frente al Total del PDF
+                    leidos = [leer_precio(p) for p in df['precio']]
+                    validos = [x for x in leidos if x]
+                    if validos:
+                        ref = leer_precio(pedido['total']) or validos[0]
+                        suma = sum(v for v, _ in validos)
+                        pedido['suma'] = formatear_precio(suma, ref[1])
+                        pedido['sin_precio'] = len(leidos) - len(validos)
+                        if pedido['total'] and leer_precio(pedido['total']):
+                            pedido['cuadra'] = suma == leer_precio(pedido['total'])[0]
                     # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio \t precio+40%),
                     # sin titulos. En pantalla, el botón Copiar lo regenera desde la tabla (orden actual).
                     lines = []
@@ -173,7 +260,8 @@ def index():
         resumen_html=resumen_html,
         resumen_texto=resumen_texto,
         error=error_msg,
-        total=total
+        total=total,
+        pedido=pedido
     )
 
 if __name__ == '__main__':

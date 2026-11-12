@@ -327,6 +327,44 @@ h2 {
     gap: 0.5rem;
 }
 
+/* Order verification data (outside the table, not copied) */
+.order-info {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.order-info h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.order-info dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+}
+
+.order-info dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.order-info dd {
+    margin: 0.15rem 0 0;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-height: 1.2em;
+}
+
+.order-info .ok { color: #00b894; margin-left: 0.35rem; }
+.order-info .bad { color: #d63031; margin-left: 0.35rem; }
+
 /* Results action buttons (Organizar + Copiar) */
 .results-actions {
     display: flex;
