@@ -63,10 +63,16 @@
           <span>📊</span>
           Resultados Detallados
         </h2>
+        <div class="results-actions">
+        <button type="button" id="btn-sort" class="btn-copy" onclick="sortResults()">
+          <span>🔤</span>
+          <span>Organizar listado</span>
+        </button>
         <button type="button" id="btn-copy" class="btn-copy" onclick="copyResults()">
           <span id="copy-icon">📋</span>
           <span id="copy-label">Copiar Resultado</span>
         </button>
+        </div>
       </div>
 
       <textarea id="raw-result" class="hidden">{{ resumen_texto }}</textarea>

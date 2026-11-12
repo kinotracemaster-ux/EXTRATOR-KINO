@@ -2,11 +2,38 @@
 // Modern PDF Extractor - Main Script
 // ===================================
 
-// Copy results to clipboard (plain text, exact format)
+// Build the copy text from the table, in the order currently shown.
+// Every cell is kept (empty separator columns included) joined by tabs.
+function tableToText() {
+    const rows = document.querySelectorAll('#results-table tbody tr');
+    return Array.from(rows).map(function (tr) {
+        return Array.from(tr.cells).map(function (td) {
+            return td.textContent.trim();
+        }).join('\t');
+    }).join('\n');
+}
+
+// Sort rows by reference (first column) in natural order: A2 before A10.
+// Whole rows are moved, so unit and price stay with their reference.
+function sortResults() {
+    const tbody = document.querySelector('#results-table tbody');
+    if (!tbody) return;
+    const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+    const rows = Array.from(tbody.rows);
+    rows.sort(function (a, b) {
+        return collator.compare(a.cells[0].textContent.trim(), b.cells[0].textContent.trim());
+    });
+    rows.forEach(function (tr) { tbody.appendChild(tr); });
+}
+
+// Copy results to clipboard (plain text, current table order)
 function copyResults() {
     const raw = document.getElementById('raw-result');
     if (!raw) return;
 
+    if (document.querySelector('#results-table tbody tr')) {
+        raw.value = tableToText();
+    }
     const text = raw.value;
     const btn = document.getElementById('btn-copy');
     const icon = document.getElementById('copy-icon');
