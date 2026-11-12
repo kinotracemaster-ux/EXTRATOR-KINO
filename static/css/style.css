@@ -365,6 +365,12 @@ h2 {
 .order-info .ok { color: #00b894; margin-left: 0.35rem; }
 .order-info .bad { color: #d63031; margin-left: 0.35rem; }
 
+/* Optional columns hidden by the user (also left out of the copy) */
+th.col-hidden,
+td.col-hidden {
+    display: none;
+}
+
 /* Optional markup column control */
 .markup-control {
     display: flex;

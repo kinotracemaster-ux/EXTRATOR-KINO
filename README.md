@@ -2,7 +2,7 @@
 
 Una app Flask que recibe un PDF con tablas, extrae de la columna 0 las cantidades (ej. `10x`) y de la columna 1 los códigos (todo hasta el primer espacio), y muestra cada código con su cantidad, la columna UNIDAD (siempre "UNIDAD") y el PRECIO leído del PDF (si no aparece, la celda queda vacía).
 
-El botón **Organizar listado** ordena las referencias en orden natural (A2 antes de A10) y **Copiar** copia el listado en el orden mostrado (incluida la columna opcional «PRECIO +N%», que se activa con la casilla «Mostrar precio con recargo» y el porcentaje elegido), separado por tabulaciones para pegar en una hoja de cálculo.
+El botón **Organizar listado** ordena las referencias en orden natural (A2 antes de A10) y **Copiar** copia el listado en el orden mostrado (las columnas PRECIO y «PRECIO +N%» están ocultas por defecto y solo se copian si se activan con sus casillas «Mostrar precio» y «Mostrar precio con recargo»; el porcentaje se elige al lado), separado por tabulaciones para pegar en una hoja de cálculo.
 
 ## Cómo usar localmente
 

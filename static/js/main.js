@@ -9,6 +9,8 @@ function tableToText() {
     return Array.from(rows).map(function (tr) {
         return Array.from(tr.cells).map(function (td) {
             return td.textContent.trim();
+        }).filter(function (text, i) {
+            return !tr.cells[i].classList.contains('col-hidden');
         }).join('\t');
     }).join('\n');
 }
@@ -96,6 +98,22 @@ function updateMarkup() {
     });
 }
 
+// ---- Optional PRECIO column, hidden by default ----
+// The cells stay in the table (the markup column reads them); they are only
+// hidden, and hidden cells are left out of the copy.
+function updatePriceVisibility() {
+    const table = document.getElementById('results-table');
+    const toggle = document.getElementById('price-toggle');
+    if (!table || !toggle) return;
+    const priceIdx = Array.from(table.tHead.rows[0].cells).findIndex(function (th) {
+        return th.textContent.trim().toUpperCase() === 'PRECIO';
+    });
+    if (priceIdx < 0) return;
+    Array.from(table.rows).forEach(function (tr) {
+        tr.cells[priceIdx].classList.toggle('col-hidden', !toggle.checked);
+    });
+}
+
 // Copy results to clipboard (plain text, current table order)
 function copyResults() {
     const raw = document.getElementById('raw-result');
@@ -135,6 +153,7 @@ function copyResults() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    updatePriceVisibility();
     const fileInput = document.getElementById('pdf-input');
     const fileLabel = document.querySelector('.file-input-label');
     const fileName = document.querySelector('.file-name');
