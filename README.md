@@ -1,6 +1,6 @@
 # PDF Table Extractor
 
-Una app Flask que recibe un PDF con tablas, extrae de la columna 0 las cantidades (ej. `10x`) y de la columna 1 los códigos (todo hasta el primer espacio), y muestra cada código con su cantidad, UNIDAD y PRECIO (leídos de la misma fila del PDF; si falta un dato la celda queda vacía).
+Una app Flask que recibe un PDF con tablas, extrae de la columna 0 las cantidades (ej. `10x`) y de la columna 1 los códigos (todo hasta el primer espacio), y muestra cada código con su cantidad, la columna UNIDAD (siempre "UNIDAD") y el PRECIO leído del PDF (si no aparece, la celda queda vacía).
 
 El botón **Organizar listado** ordena las referencias en orden natural (A2 antes de A10) y **Copiar** copia el listado en el orden mostrado, separado por tabulaciones para pegar en una hoja de cálculo.
 
