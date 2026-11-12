@@ -67,13 +67,18 @@
           <div><dt>Fecha</dt><dd>{{ pedido.fecha }}</dd></div>
           <div><dt>Total del PDF</dt><dd>{{ pedido.total }}</dd></div>
           {% if pedido.suma %}
-          <div><dt>Suma de PRECIO</dt><dd>{{ pedido.suma }}
+          <div><dt>Suma de {{ 'CANTIDAD × PRECIO' if pedido.suma_x_cant else 'PRECIO' }}</dt><dd>{{ pedido.suma }}
             {% if pedido.cuadra is defined %}<span class="{{ 'ok' if pedido.cuadra else 'bad' }}">{{ '✓ cuadra' if pedido.cuadra else '✗ no cuadra' }}</span>{% endif %}
           </dd></div>
           {% endif %}
           {% if pedido.articulos %}
-          <div><dt>Artículos (PDF / extraídos)</dt><dd>{{ pedido.articulos }} / {{ total }}
+          <div><dt>Referencias (PDF / extraídas)</dt><dd>{{ pedido.articulos }} / {{ total }}
             <span class="{{ 'ok' if pedido.articulos|int == total else 'bad' }}">{{ '✓' if pedido.articulos|int == total else '✗' }}</span>
+          </dd></div>
+          {% endif %}
+          {% if pedido.unidades %}
+          <div><dt>Unidades (PDF / extraídas)</dt><dd>{{ pedido.unidades }} / {{ pedido.unidades_ext }}
+            <span class="{{ 'ok' if pedido.unidades|int == pedido.unidades_ext else 'bad' }}">{{ '✓' if pedido.unidades|int == pedido.unidades_ext else '✗' }}</span>
           </dd></div>
           {% endif %}
           {% if pedido.sin_precio %}
