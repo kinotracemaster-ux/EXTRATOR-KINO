@@ -9,6 +9,8 @@ function tableToText() {
     return Array.from(rows).map(function (tr) {
         return Array.from(tr.cells).map(function (td) {
             return td.textContent.trim();
+        }).filter(function (text, i) {
+            return !tr.cells[i].classList.contains('col-hidden');
         }).join('\t');
     }).join('\n');
 }
@@ -24,6 +26,92 @@ function sortResults() {
         return collator.compare(a.cells[0].textContent.trim(), b.cells[0].textContent.trim());
     });
     rows.forEach(function (tr) { tbody.appendChild(tr); });
+}
+
+// ---- Optional markup column (PRECIO +N%), hidden by default ----
+// Reads a price as written in the PDF ('$72,000.00', '$1.000,50', '3.200').
+function parsePrice(text) {
+    const m = (text || '').trim().match(/^(\$?\s*)(\d[\d.,]*)$/);
+    if (!m) return null;
+    const pref = m[1], num = m[2];
+    const dm = num.match(/([.,])(\d{1,2})$/);
+    const decSep = dm ? dm[1] : null;
+    const decs = dm ? dm[2].length : 0;
+    const thouSep = decSep === '.' ? ',' : decSep === ',' ? '.' :
+        (num.indexOf(',') >= 0 ? ',' : num.indexOf('.') >= 0 ? '.' : '');
+    const intPart = (dm ? num.slice(0, dm.index) : num).split(thouSep || '\u0000').join('');
+    if (!/^\d+$/.test(intPart)) return null;
+    const cents = Number(intPart) * 100 + (dm ? Number(dm[2].padEnd(2, '0')) : 0);
+    return { cents: cents, pref: pref, decSep: decSep || (thouSep === '.' ? ',' : '.'), thouSep: thouSep, decs: decs };
+}
+
+// Writes a value (in cents) with the same format as the PDF price.
+function formatPrice(cents, f) {
+    const scale = Math.pow(10, 2 - f.decs);
+    const units = Math.round(cents / scale);            // value in the last shown digit
+    const div = Math.pow(10, f.decs);
+    const intStr = String(Math.floor(units / div)).replace(/\B(?=(\d{3})+(?!\d))/g, f.thouSep);
+    const decStr = f.decs ? f.decSep + String(units % div).padStart(f.decs, '0') : '';
+    return f.pref + intStr + decStr;
+}
+
+// Adds, updates or removes the markup column right after PRECIO.
+function updateMarkup() {
+    const table = document.getElementById('results-table');
+    const toggle = document.getElementById('markup-toggle');
+    const pctInput = document.getElementById('markup-pct');
+    if (!table || !toggle || !pctInput) return;
+
+    const headRow = table.tHead.rows[0];
+    const priceIdx = Array.from(headRow.cells).findIndex(function (th) {
+        return th.textContent.trim().toUpperCase() === 'PRECIO';
+    });
+    if (priceIdx < 0) return;
+    const markupIdx = priceIdx + 1;
+    const exists = headRow.cells[markupIdx] && headRow.cells[markupIdx].classList.contains('markup-col');
+
+    if (!toggle.checked) {
+        if (exists) {
+            headRow.deleteCell(markupIdx);
+            Array.from(table.tBodies[0].rows).forEach(function (tr) { tr.deleteCell(markupIdx); });
+        }
+        return;
+    }
+
+    const pct = parseFloat(String(pctInput.value).replace(',', '.'));
+    const valid = isFinite(pct) && pct >= 0;
+    if (!exists) {
+        const th = document.createElement('th');
+        th.className = 'markup-col';
+        headRow.insertBefore(th, headRow.cells[markupIdx] || null);
+    }
+    headRow.cells[markupIdx].textContent = valid ? 'PRECIO +' + pct + '%' : 'PRECIO +%';
+
+    Array.from(table.tBodies[0].rows).forEach(function (tr) {
+        let td = tr.cells[markupIdx];
+        if (!exists) {
+            td = tr.insertCell(markupIdx);
+            td.className = 'markup-col';
+        }
+        const p = parsePrice(tr.cells[priceIdx].textContent);
+        td.textContent = (p && valid) ? formatPrice(p.cents * (100 + pct) / 100, p) : '';
+    });
+}
+
+// ---- Optional PRECIO column, hidden by default ----
+// The cells stay in the table (the markup column reads them); they are only
+// hidden, and hidden cells are left out of the copy.
+function updatePriceVisibility() {
+    const table = document.getElementById('results-table');
+    const toggle = document.getElementById('price-toggle');
+    if (!table || !toggle) return;
+    const priceIdx = Array.from(table.tHead.rows[0].cells).findIndex(function (th) {
+        return th.textContent.trim().toUpperCase() === 'PRECIO';
+    });
+    if (priceIdx < 0) return;
+    Array.from(table.rows).forEach(function (tr) {
+        tr.cells[priceIdx].classList.toggle('col-hidden', !toggle.checked);
+    });
 }
 
 // Copy results to clipboard (plain text, current table order)
@@ -65,6 +153,7 @@ function copyResults() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    updatePriceVisibility();
     const fileInput = document.getElementById('pdf-input');
     const fileLabel = document.querySelector('.file-input-label');
     const fileName = document.querySelector('.file-name');

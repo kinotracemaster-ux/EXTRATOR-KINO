@@ -365,6 +365,37 @@ h2 {
 .order-info .ok { color: #00b894; margin-left: 0.35rem; }
 .order-info .bad { color: #d63031; margin-left: 0.35rem; }
 
+/* Optional columns hidden by the user (also left out of the copy) */
+th.col-hidden,
+td.col-hidden {
+    display: none;
+}
+
+/* Optional markup column control */
+.markup-control {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.markup-control label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+}
+
+.markup-control input[type="number"] {
+    width: 5rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font: inherit;
+}
+
 /* Results action buttons (Organizar + Copiar) */
 .results-actions {
     display: flex;

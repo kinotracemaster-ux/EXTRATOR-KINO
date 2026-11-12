@@ -68,9 +68,6 @@ def precio_de_fila(words, qty_word, code_word, columnas):
             return w['text']
     return ''
 
-RECARGO = Decimal('1.40')  # precio + 40 %
-
-
 def leer_precio(precio):
     """Interpreta un precio del PDF ('$72,000.00', '$1.000,50', '3.200').
     Devuelve (valor, formato) o None si no se puede leer."""
@@ -102,15 +99,6 @@ def formatear_precio(valor, formato):
     if miles_sep != ',':
         txt = txt.replace(',', '\0').replace('.', ',' if dec_sep == ',' else '.').replace('\0', miles_sep)
     return pref + txt
-
-
-def precio_mas_40(precio):
-    """Devuelve el precio + 40 % con el mismo formato del PDF. Si no se puede leer, ''."""
-    leido = leer_precio(precio)
-    if not leido:
-        return ''
-    valor, formato = leido
-    return formatear_precio(valor * RECARGO, formato)
 
 
 # --- Datos del pedido para verificación (fuera de la tabla, no se copian) ---
@@ -229,7 +217,6 @@ def index():
                     error_msg = "No se hallaron códigos/cantidades en el PDF."
                 else:
                     df = pd.DataFrame(datos, columns=['codigo','cantidad','unidad','precio'])
-                    df['precio40'] = df['precio'].apply(precio_mas_40)
                     # Verificación: suma de los precios extraídos frente al Total del PDF
                     leidos = [leer_precio(p) for p in df['precio']]
                     validos = [x for x in leidos if x]
@@ -240,16 +227,16 @@ def index():
                         pedido['sin_precio'] = len(leidos) - len(validos)
                         if pedido['total'] and leer_precio(pedido['total']):
                             pedido['cuadra'] = suma == leer_precio(pedido['total'])[0]
-                    # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio \t precio+40%),
+                    # Texto plano para copiar (codigo \t vacío \t cantidad \t unidad \t vacío \t precio),
                     # sin titulos. En pantalla, el botón Copiar lo regenera desde la tabla (orden actual).
                     lines = []
                     for _, row in df.iterrows():
-                        lines.append(f"{row['codigo']}\t\t{row['cantidad']}\t{row['unidad']}\t\t{row['precio']}\t{row['precio40']}")
+                        lines.append(f"{row['codigo']}\t\t{row['cantidad']}\t{row['unidad']}\t\t{row['precio']}")
                     resumen_texto = '\n'.join(lines)
                     # Columnas vacías de separación: tras el código y entre UNIDAD y PRECIO
                     df.insert(1, '', '')
                     df.insert(4, ' ', '')
-                    df.columns = ['codigo', '', 'cantidad', 'UNIDAD', '', 'PRECIO', 'PRECIO +40%']
+                    df.columns = ['codigo', '', 'cantidad', 'UNIDAD', '', 'PRECIO']
                     resumen_html = df.to_html(index=False, table_id='results-table')
 
             except Exception as e:
