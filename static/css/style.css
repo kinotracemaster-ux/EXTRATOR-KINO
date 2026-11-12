@@ -365,6 +365,62 @@ h2 {
 .order-info .ok { color: #00b894; margin-left: 0.35rem; }
 .order-info .bad { color: #d63031; margin-left: 0.35rem; }
 
+/* Warnings and PDF map (inside the verification box, never copied) */
+.order-warnings {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0.6rem 0.8rem;
+    background: #fff5f5;
+    border: 1px solid #fab1a0;
+    border-radius: var(--radius-sm);
+    color: #d63031;
+    font-size: 0.875rem;
+}
+
+.pdf-map {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.pdf-map summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.pdf-map table {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.pdf-map thead {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.pdf-map th,
+.pdf-map td,
+.pdf-map td:first-child,
+.pdf-map td:last-child {
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+    font-weight: normal;
+    color: var(--text-primary);
+    text-transform: none;
+}
+
+.pdf-map tbody tr:hover {
+    transform: none;
+}
+
+.pdf-map tr.warn td {
+    color: #d63031;
+    font-weight: 600;
+}
+
+.pdf-map tr.page-start td {
+    border-top: 2px dashed var(--text-secondary);
+}
+
 /* Optional columns hidden by the user (also left out of the copy) */
 th.col-hidden,
 td.col-hidden {

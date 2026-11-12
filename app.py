@@ -49,26 +49,6 @@ def find_columns(words):
     return None, None
 
 
-def precio_de_fila(words, qty_word, code_word, columnas):
-    """Busca el precio a la derecha del código, en la misma fila que la cantidad
-    o que el código (en algunos PDF el precio va alineado con la cantidad y el
-    código queda un poco más arriba). Si no se encuentra, devuelve ''."""
-    anclas, x_p = columnas
-    tops = {qty_word['top'], code_word['top']}
-    fila = [w for w in words
-            if w['x0'] > code_word['x1']
-            and any(abs(w['top'] - t) <= LINE_TOL for t in tops)]
-    fila.sort(key=lambda w: w['x0'])
-    if anclas and x_p is not None:
-        precio = [w['text'] for w in fila
-                  if min(anclas, key=lambda a: abs(a[0] - (w['x0'] + w['x1']) / 2))[0] == x_p]
-        return ' '.join(precio)
-    # Sin encabezados: precio = primer valor con '$'
-    for w in fila:
-        if w['text'].startswith('$') and PRICE_PAT.match(w['text']):
-            return w['text']
-    return ''
-
 def leer_precio(precio):
     """Interpreta un precio del PDF ('$72,000.00', '$1.000,50', '3.200').
     Devuelve (valor, formato) o None si no se puede leer."""
@@ -167,6 +147,136 @@ def datos_pedido(pdf):
     return datos
 
 
+
+# --- Lectura de artículos como una lista continua --------------------------
+# Todas las páginas se leen como una sola secuencia de líneas, así un artículo
+# partido por un salto de página (cantidad abajo, código en la página siguiente)
+# o con la descripción en varias líneas se arma igual.
+QTY_WORD   = re.compile(r'^(\d+)[x×]$')
+QTY_CODE   = re.compile(r'^(\d+)[x×]([A-Za-z0-9][A-Za-z0-9:.\-]*)$')
+FIN_PAT    = re.compile(r'^\s*(TOTAL|SUBTOTAL|OTROS)\b', re.I)
+
+
+def _codigo_suelto(t):
+    """Código al inicio de una línea sin cantidad delante: debe tener un dígito y
+    una letra o guion (810-C1, 312-1, A10), para no confundirlo con números sueltos."""
+    return bool(CODE_PAT.match(t)) and any(c.isdigit() for c in t) and \
+        any(c.isalpha() or c == '-' for c in t)
+
+
+def lineas_continuas(pdf):
+    lineas = []
+    for n, page in enumerate(pdf.pages, 1):
+        words = page.extract_words(use_text_flow=True)
+        cols = find_columns(words)
+        grupos = []
+        for w in sorted(words, key=lambda w: w['top']):
+            if grupos and abs(w['top'] - grupos[-1]['top']) <= LINE_TOL:
+                grupos[-1]['words'].append(w)
+            else:
+                grupos.append({'top': w['top'], 'words': [w]})
+        for g in grupos:
+            g['words'].sort(key=lambda w: w['x0'])
+            g.update(pagina=n, cols=cols, texto=' '.join(w['text'] for w in g['words']))
+            lineas.append(g)
+    return lineas
+
+
+def _es_precio(w, cols):
+    anclas, x_p = cols
+    if anclas and x_p is not None:
+        cerca = min(anclas, key=lambda a: abs(a[0] - (w['x0'] + w['x1']) / 2))[0]
+        return cerca == x_p and bool(PRICE_PAT.match(w['text']))
+    return w['text'].startswith('$') and bool(PRICE_PAT.match(w['text']))
+
+
+def leer_articulos(pdf):
+    """Devuelve (datos, mapa, avisos).
+    datos: artículos {codigo, cantidad, unidad, precio} en el orden del PDF.
+    mapa:  cada línea del PDF con su página y lo que se entendió de ella.
+    avisos: posibles problemas (cantidad sin código, código sin cantidad, ...)."""
+    lineas = lineas_continuas(pdf)
+    inicio = next((i + 1 for i, l in enumerate(lineas) if ART_PAT.search(l['texto'])), 0)
+    datos, avisos = [], []
+    mapa = [{'pagina': l['pagina'], 'texto': l['texto'], 'tipo': ''} for l in lineas]
+    actual = None
+    fin = False
+
+    def cerrar():
+        if not actual:
+            return
+        if actual['cantidad'] is not None and actual['codigo']:
+            datos.append({'codigo': actual['codigo'], 'cantidad': actual['cantidad'],
+                          'unidad': UNIDAD_FIJA, 'precio': actual['precio']})
+            paginas = sorted({lineas[i]['pagina'] for i in actual['lineas']})
+            for i in actual['lineas']:
+                mapa[i]['tipo'] = f"Artículo {actual['codigo']}"
+                if len(paginas) > 1:
+                    mapa[i]['tipo'] += ' (partido entre páginas)'
+            if not actual['precio']:
+                avisos.append(f"{actual['codigo']}: no se encontró precio.")
+        elif actual['cantidad'] is not None:
+            pag = lineas[min(actual['lineas'])]['pagina']
+            avisos.append(f"Página {pag}: cantidad {actual['cantidad']}x sin código; no se incluyó.")
+            for i in actual['lineas']:
+                mapa[i]['tipo'] = '⚠ Cantidad sin código'
+        elif actual['codigo']:
+            pag = lineas[min(actual['lineas'])]['pagina']
+            avisos.append(f"Página {pag}: código {actual['codigo']} sin cantidad; no se incluyó.")
+            for i in actual['lineas']:
+                mapa[i]['tipo'] = '⚠ Código sin cantidad'
+
+    def nuevo():
+        return {'cantidad': None, 'codigo': '', 'precio': '', 'lineas': set()}
+
+    for i, l in enumerate(lineas):
+        if i < inicio:
+            mapa[i]['tipo'] = 'Encabezado'
+            continue
+        if fin:
+            mapa[i]['tipo'] = 'Pie'
+            continue
+        if FIN_PAT.match(l['texto']):
+            cerrar()
+            actual = None
+            fin = True
+            mapa[i]['tipo'] = 'Total'
+            continue
+        prev_qty = False
+        for k, w in enumerate(l['words']):
+            t = w['text']
+            m = QTY_CODE.match(t)
+            mq = QTY_WORD.match(t)
+            if m or mq:
+                ws = l['words']
+                con_codigo = bool(m) or (k + 1 < len(ws) and CODE_PAT.match(ws[k + 1]['text']))
+                # "5x CODIGO" en la misma línea siempre abre un artículo nuevo; una
+                # cantidad sola completa el código pendiente (descripción en varias
+                # líneas o código en la página anterior).
+                if actual is None or actual['cantidad'] is not None or con_codigo:
+                    cerrar()
+                    actual = nuevo()
+                actual['cantidad'] = int((m or mq).group(1))
+                actual['lineas'].add(i)
+                if m:
+                    actual['codigo'] = m.group(2)
+                prev_qty = bool(mq)
+                continue
+            if (prev_qty and CODE_PAT.match(t)) or (k == 0 and _codigo_suelto(t)):
+                if actual is None or (actual['codigo'] and not prev_qty):
+                    cerrar()
+                    actual = nuevo()
+                actual['codigo'] = t
+                actual['lineas'].add(i)
+            elif actual and not actual['precio'] and i in actual['lineas'] and _es_precio(w, l['cols']):
+                actual['precio'] = t
+            prev_qty = False
+        if not mapa[i]['tipo'] and (actual is None or i not in actual['lineas']):
+            mapa[i]['tipo'] = 'Descripción'
+    cerrar()
+    return datos, mapa, avisos
+
+
 @app.route('/', methods=['GET','POST'])
 def index():
     resumen_html  = None
@@ -174,6 +284,7 @@ def index():
     error_msg     = None
     total         = 0
     pedido        = None
+    mapa          = None
 
     if request.method == 'POST':
         f = request.files.get('pdf')
@@ -185,55 +296,11 @@ def index():
             f.save(path)
 
             try:
-                datos = []
-                # Patrón unificado: captura cantidad y código pegados o separados
-                combined_pat = re.compile(r'^(\d+)[x×]\s*([A-Za-z0-9][A-Za-z0-9:.\-]*)$')
-                # Patrón solo cantidad (para fallback)
-                qty_only_pat = re.compile(r'^(\d+)[x×]\s*$')
-
+                mapa, avisos = [], []
                 with pdfplumber.open(path) as pdf:
                     pedido = datos_pedido(pdf)
-                    # Cantidad que quedó al final de una página sin su código
-                    # (el código pasó a la página siguiente).
-                    pendiente = None
-                    for page in pdf.pages:
-                        words = page.extract_words(use_text_flow=True)
-                        columnas = find_columns(words)
-                        if pendiente:
-                            # El código es la primera palabra de la página con forma de código
-                            for cw in words:
-                                if CODE_PAT.match(cw['text']) and any(c.isdigit() for c in cw['text']):
-                                    datos.append({'codigo': cw['text'], 'cantidad': pendiente['cantidad'],
-                                                  'unidad': UNIDAD_FIJA, 'precio': pendiente['precio']})
-                                    break
-                            pendiente = None
-                        for idx, w in enumerate(words):
-                            txt = w['text']
-                            # 1) ¿Cantidad+Código en la misma palabra?
-                            m1 = combined_pat.match(txt)
-                            if m1:
-                                cantidad = int(m1.group(1))
-                                codigo   = m1.group(2)
-                                precio = precio_de_fila(words, w, w, columnas)
-                                datos.append({'codigo': codigo, 'cantidad': cantidad,
-                                              'unidad': UNIDAD_FIJA, 'precio': precio})
-                                continue
-                            # 2) ¿Solo cantidad? entonces tomo la siguiente palabra como código
-                            m2 = qty_only_pat.match(txt)
-                            if m2 and (idx + 1 >= len(words)
-                                       or not CODE_PAT.match(words[idx+1]['text'])):
-                                # Sin código a continuación: puede estar en la página siguiente
-                                pendiente = {'cantidad': int(m2.group(1)),
-                                             'precio': precio_de_fila(words, w, w, columnas)}
-                                continue
-                            if m2 and idx + 1 < len(words):
-                                cantidad = int(m2.group(1))
-                                codigo   = words[idx+1]['text']
-                                # validamos que el token “parezca” código
-                                if CODE_PAT.match(codigo):
-                                    precio = precio_de_fila(words, w, words[idx+1], columnas)
-                                    datos.append({'codigo': codigo, 'cantidad': cantidad,
-                                                  'unidad': UNIDAD_FIJA, 'precio': precio})
+                    datos, mapa, avisos = leer_articulos(pdf)
+                pedido['avisos'] = avisos
 
                 total = len(datos)
                 if total == 0:
@@ -278,7 +345,8 @@ def index():
         resumen_texto=resumen_texto,
         error=error_msg,
         total=total,
-        pedido=pedido
+        pedido=pedido,
+        mapa=mapa
     )
 
 if __name__ == '__main__':
