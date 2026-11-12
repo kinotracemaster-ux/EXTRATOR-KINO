@@ -365,6 +365,92 @@ h2 {
 .order-info .ok { color: #00b894; margin-left: 0.35rem; }
 .order-info .bad { color: #d63031; margin-left: 0.35rem; }
 
+/* Warnings and PDF map (inside the verification box, never copied) */
+.review {
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.review-ok {
+    background: #e6fffa;
+    border: 1px solid #00b894;
+    color: #00866b;
+    font-weight: 600;
+}
+
+.review-bad {
+    background: #fff5f5;
+    border: 1px solid #fab1a0;
+    color: #c0392b;
+}
+
+.review-bad h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #c0392b;
+}
+
+.review-bad ul {
+    margin: 0 0 0.5rem 1.2rem;
+    padding: 0;
+}
+
+.review-bad li {
+    margin-bottom: 0.3rem;
+}
+
+.review-hint {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.pdf-map {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.pdf-map summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.pdf-map table {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.pdf-map thead {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.pdf-map th,
+.pdf-map td,
+.pdf-map td:first-child,
+.pdf-map td:last-child {
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+    font-weight: normal;
+    color: var(--text-primary);
+    text-transform: none;
+}
+
+.pdf-map tbody tr:hover {
+    transform: none;
+}
+
+.pdf-map tr.warn td {
+    color: #d63031;
+    font-weight: 600;
+}
+
+.pdf-map tr.page-start td {
+    border-top: 2px dashed var(--text-secondary);
+}
+
 /* Optional columns hidden by the user (also left out of the copy) */
 th.col-hidden,
 td.col-hidden {

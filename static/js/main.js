@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Animate table rows on load
-    const tableRows = document.querySelectorAll('tbody tr');
+    const tableRows = document.querySelectorAll('#results-table tbody tr');
     tableRows.forEach((row, index) => {
         row.style.animation = `fadeIn 0.5s ease-in-out ${index * 0.05}s both`;
     });
