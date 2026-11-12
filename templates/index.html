@@ -58,6 +58,31 @@
         <span class="number">{{ total }}</span>
       </div>
 
+      {% if pedido %}
+      <div class="order-info">
+        <h3>🔎 Datos del pedido (verificación)</h3>
+        <dl>
+          <div><dt>N.º de pedido</dt><dd>{{ pedido.pedido }}</dd></div>
+          <div><dt>Cliente</dt><dd>{{ pedido.cliente }}</dd></div>
+          <div><dt>Fecha</dt><dd>{{ pedido.fecha }}</dd></div>
+          <div><dt>Total del PDF</dt><dd>{{ pedido.total }}</dd></div>
+          {% if pedido.suma %}
+          <div><dt>Suma de PRECIO</dt><dd>{{ pedido.suma }}
+            {% if pedido.cuadra is defined %}<span class="{{ 'ok' if pedido.cuadra else 'bad' }}">{{ '✓ cuadra' if pedido.cuadra else '✗ no cuadra' }}</span>{% endif %}
+          </dd></div>
+          {% endif %}
+          {% if pedido.articulos %}
+          <div><dt>Artículos (PDF / extraídos)</dt><dd>{{ pedido.articulos }} / {{ total }}
+            <span class="{{ 'ok' if pedido.articulos|int == total else 'bad' }}">{{ '✓' if pedido.articulos|int == total else '✗' }}</span>
+          </dd></div>
+          {% endif %}
+          {% if pedido.sin_precio %}
+          <div><dt>Filas sin precio</dt><dd><span class="bad">{{ pedido.sin_precio }}</span></dd></div>
+          {% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
       <div class="results-header">
         <h2>
           <span>📊</span>
