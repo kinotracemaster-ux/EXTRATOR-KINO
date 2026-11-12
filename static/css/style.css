@@ -327,6 +327,13 @@ h2 {
     gap: 0.5rem;
 }
 
+/* Results action buttons (Organizar + Copiar) */
+.results-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
 /* Table Styles */
 .table-wrapper {
     overflow-x: auto;
